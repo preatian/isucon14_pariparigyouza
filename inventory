@@ -1,0 +1,3 @@
+kw ansible_host=x.x.x.x ansible_user=isucon ansible_sudo_pass=isucon
+kz ansible_host=x.x.x.x ansible_user=isucon ansible_sudo_pass=isucon
+other ansible_host=x.x.x.x ansible_user=isucon ansible_sudo_pass=isucon

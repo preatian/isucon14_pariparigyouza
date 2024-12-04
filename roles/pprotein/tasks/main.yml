@@ -1,0 +1,61 @@
+---
+
+- name: get package
+  apt:
+    update_cache: true
+    name:
+      - graphviz
+      - gv
+
+- name: make dir
+  file:
+    path: "/opt/pprotein"
+    state: directory
+    owner: "{{ pprotein_user | default(ansible_user) }}"
+
+- name: get binary
+  unarchive:
+    remote_src: true
+    src: https://github.com/kaz/pprotein/releases/download/v1.2.3/pprotein_1.2.3_linux_amd64.tar.gz
+    dest: /opt/pprotein
+
+- name: make config dir
+  file:
+    path: "/opt/pprotein/data"
+    state: directory
+    owner: "{{ pprotein_user | default(ansible_user) }}"
+
+- name: set config file
+  template:
+    src: targets.json.j2
+    owner: "{{ pprotein_user | default(ansible_user) }}"
+    dest: /opt/pprotein/data/targets.json
+  notify:
+    - restart pprotein
+
+- name: set alp config file
+  template:
+    src: alp_conf.yml.j2
+    dest: /opt/pprotein/data/alp.yml
+    owner: "{{ pprotein_user | default(ansible_user) }}"
+  notify:
+    - restart pprotein
+
+- name: set systemd file
+  template:
+    src: pprotein.service.j2
+    dest: /etc/systemd/system/pprotein.service
+  notify:
+    - daemon-reload
+    - restart pprotein
+
+- name: enabled pprotein
+  service:
+    name: pprotein
+    state: restarted
+    enabled: true
+
+- name: started pprotein
+  service:
+    name: pprotein
+    state: started

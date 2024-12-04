@@ -1,0 +1,48 @@
+---
+
+- name: get package
+  apt:
+    name:
+      - graphviz
+      - gv
+
+- name: make dir
+  file:
+    path: "/opt/pprotein"
+    state: directory
+    owner: "{{ pprotein_user | default(ansible_user) }}"
+
+- name: get binary
+  unarchive:
+    remote_src: true
+    src: https://github.com/kaz/pprotein/releases/download/v1.2.3/pprotein_1.2.3_linux_amd64.tar.gz
+    dest: /opt/pprotein
+
+# - name: git clone source
+#   git:
+#     repo: https://github.com/ikura-hamu/pprotein.git
+#     dest: "/opt/pprotein"
+#
+# - name: build pprotein
+#   make:
+#     chdir: "/opt/pprotein"
+#     targets: build
+
+- name: set systemd file
+  copy:
+    src: pprotein-agent.service
+    dest: /etc/systemd/system/pprotein-agent.service
+  notify:
+    - agent daemon-reload
+    - restart pprotein-agent
+
+- name: enabled pprotein-agent
+  service:
+    name: pprotein-agent
+    state: restarted
+    enabled: true
+
+- name: started pprotein
+  service:
+    name: pprotein
+    state: started

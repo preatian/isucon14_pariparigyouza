@@ -1,0 +1,7 @@
+---
+
+- name: restart webserver_go
+  service:
+    name: "{{ webserver_go_service_name }}"
+    state: restarted
+

@@ -1,0 +1,23 @@
+---
+- hosts: all
+  become: true
+  roles:
+    - role: alp
+    - role: nginx
+    - role: slp
+    - role: mysql
+      tags: mysql
+    - role: pprotein
+  vars:
+    pprof_target:
+      host: localhost
+      port: 8080
+    httplog_target:
+      host: localhost
+      port: 9000
+    slowlog_target:
+      host: localhost
+      port: 9000
+    pt_target:
+      host: localhost
+      port: 9000

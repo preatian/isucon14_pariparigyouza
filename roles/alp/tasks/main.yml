@@ -1,0 +1,22 @@
+---
+
+- name: get package
+  apt:
+    name: unzip
+
+- name: make dir
+  file:
+    path: "/opt/alp"
+    state: directory
+
+- name: get binary
+  unarchive:
+    remote_src: true
+    src: https://github.com/tkuchiki/alp/releases/download/v1.0.12/alp_linux_amd64.zip
+    dest: /opt/alp
+
+- name: make syn link to PATH
+  file:
+    src: /opt/alp/alp
+    dest: /usr/local/bin/alp
+    state: link

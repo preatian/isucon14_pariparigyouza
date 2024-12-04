@@ -1,0 +1,21 @@
+- hosts: all
+  vars:
+    unit_name: isupipe-go
+  tasks:
+    - name: chown /home/isucon
+      shell: "chown -R {{ ansible_ssh_user }} /home/isucon"
+      become: True
+    - name: sync webapp
+      synchronize:
+        src: ./webapp
+        dest: /home/isucon
+    - name: sync env.sh
+      synchronize:
+        src: ./env.sh
+        dest: /home/isucon/env.sh
+    - name: build and restart webapp
+      shell: |
+        cd /home/isucon/webapp/go
+        make
+        systemctl restart {{ unit_name }}
+      become: True

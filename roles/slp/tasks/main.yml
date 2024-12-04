@@ -1,0 +1,24 @@
+---
+
+# TODO logrotate の設定変える
+
+- name: get package
+  apt:
+    name: unzip
+
+- name: make dir
+  file:
+    path: "/opt/slp"
+    state: directory
+
+- name: get binary
+  unarchive:
+    remote_src: true
+    src: https://github.com/tkuchiki/slp/releases/download/v0.2.0/slp_linux_amd64.zip
+    dest: /opt/slp
+
+- name: make syn link to PATH
+  file:
+    src: /opt/slp/slp
+    dest: /usr/local/bin/slp
+    state: link

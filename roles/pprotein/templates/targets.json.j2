@@ -1,0 +1,26 @@
+[
+  {
+    "Type": "pprof",
+    "Label": "{{ pprof_target.host }}",
+    "URL": "http://{{ pprof_target.host }}:{{ pprof_target.port }}/debug/pprof/profile",
+    "Duration": {{ exec_duration | default(60) }}
+  },
+  {
+    "Type": "httplog",
+    "Label": "{{ httplog_target.host }}",
+    "URL": "http://{{ httplog_target.host }}:{{ httplog_target.port }}/debug/log/httplog",
+    "Duration": {{ exec_duration | default(60) }}
+  },
+  {
+    "Type": "slowlog",
+    "Label": "{{ slowlog_target.host }}",
+    "URL": "http://{{ slowlog_target.host }}:{{ slowlog_target.port }}/debug/log/slowlog",
+    "Duration": {{ exec_duration | default(60) }}
+  },
+  {
+    "Type": "pt",
+    "Label": "{{ pt_target.host }}",
+    "URL": "http://{{ pt_target.host }}:{{ pt_target.port }}/debug/log/slowlog",
+    "Duration": {{ exec_duration | default(60) }}
+  }
+]

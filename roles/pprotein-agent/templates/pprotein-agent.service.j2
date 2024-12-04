@@ -1,0 +1,11 @@
+[Unit]
+Description=pprotein-agent
+
+[Service]
+WorkingDirectory=/opt/pprotein/
+ExecStart=/opt/pprotein/pprotein-agent
+Restart=always
+User={{ pprotein_user | default(ansible_user) }}
+
+[Install]
+WantedBy=multi-user.target

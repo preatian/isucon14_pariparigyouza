@@ -1,0 +1,10 @@
+---
+
+- name: daemon-reload
+  shell: systemctl daemon-reload
+
+- name: restart pprotein
+  service:
+    name: pprotein
+    state: restarted
+

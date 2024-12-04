@@ -1,0 +1,12 @@
+- hosts: all
+  tasks:
+    - name: download webapp
+      synchronize:
+        src: /home/isucon/webapp
+        dest: ./
+        mode: pull
+    - name: download env.sh
+      synchronize:
+        src: /home/isucon/env.sh
+        dest: ./env.sh
+        mode: pull

@@ -1,0 +1,38 @@
+---
+
+- name: exec replace_script
+  script:
+    cmd: insert_lines.sh
+    chdir: "{{ webserver_go_dir }}"
+  register: result
+  changed_when: result.rc == 254
+  failed_when: result.rc not in [ 0, 254 ]
+  become_user: "{{ iscon_user }}"
+
+- name: check go module
+  command:
+    cmd: "go list github.com/kaz/pprotein/integration/echov4"
+    chdir: "{{ webserver_go_dir }}"
+  register: is_exist_module
+  changed_when: false
+  failed_when: false
+  become_user: "{{ iscon_user }}"
+
+- name: install go module
+  command:
+    cmd: "go get github.com/kaz/pprotein/integration/echov4"
+    chdir: "{{ webserver_go_dir }}"
+  when: is_exist_module.rc == 1
+  become_user: "{{ iscon_user }}"
+
+- name: build webserver_go
+  make:
+    chdir: "{{ webserver_go_dir }}"
+    target: build
+  notify: restart webserver_go
+  become_user: "{{ iscon_user }}"
+
+- name: webserver_go is stated
+  service:
+    name: "{{ webserver_go_service_name }}"
+    state: started
