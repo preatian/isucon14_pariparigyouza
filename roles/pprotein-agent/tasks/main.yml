@@ -29,8 +29,8 @@
 #     targets: build
 
 - name: set systemd file
-  copy:
-    src: pprotein-agent.service
+  template:
+    src: pprotein-agent.service.j2
     dest: /etc/systemd/system/pprotein-agent.service
   notify:
     - agent daemon-reload

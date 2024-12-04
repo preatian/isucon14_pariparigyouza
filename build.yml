@@ -8,6 +8,7 @@
     - role: mysql
       tags: mysql
     - role: pprotein
+      #- role: pprotein-agent
   vars:
     pprof_target:
       host: localhost
