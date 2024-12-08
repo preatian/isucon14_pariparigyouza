@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+type UpdatedChair struct {
+	ID          string    `db:"id"`
+	IID          string    `db:"iid"`
+	CreatedAt   time.Time `db:"created_at"`
+	Latitude  int       `db:"latitude"`
+	Longitude int       `db:"longitude"`
+	Name        string    `db:"name"`
+	Model       string    `db:"model"`
+}
+
 type Chair struct {
 	ID          string    `db:"id"`
 	OwnerID     string    `db:"owner_id"`
