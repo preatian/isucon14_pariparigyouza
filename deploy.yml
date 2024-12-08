@@ -1,6 +1,7 @@
 - hosts: all
   vars:
-    unit_name: isupipe-go
+    unit_name: isuride-go
+    binary_name: isuride
   tasks:
     - name: chown /home/isucon
       shell: "chown -R {{ ansible_ssh_user }} /home/isucon"
@@ -16,6 +17,7 @@
     - name: build and restart webapp
       shell: |
         cd /home/isucon/webapp/go
-        make
+        go build
+        mv go {{ binary_name }}
         systemctl restart {{ unit_name }}
       become: True
