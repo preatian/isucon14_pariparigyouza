@@ -872,10 +872,24 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	chairs := []UpdatedChair{}
+	// ANY_VALUE() を使うと ONLY_FULL_GROUP_BY を無効にせず いけるらしい
 	err = tx.SelectContext(
 		ctx,
 		&chairs,
-		`select * from (select chair_table.id, chair_locations.id as iid, chair_locations.created_at, chair_locations.latitude, chair_locations.longitude, chair_table.name, chair_table.model from chair_locations inner join (select dup_table.id, dup_table.created_at, ifnull(dup_table.status, "COMPLETED"), dup_table.name, dup_table.model from (select chairs.id, update_table.status, update_table.created_at, chairs.name, chairs.model from chairs left join (select ride_statuses.status, rides.chair_id, ride_statuses.created_at from rides inner join ride_statuses on rides.id = ride_statuses.ride_id) as update_table on chairs.id = update_table.chair_id where chairs.is_active is true ORDER BY chairs.id ASC, update_table.created_at DESC) as dup_table where dup_table.status = "COMPLETED" || dup_table.status is NULL group by dup_table.id) chair_table on chair_locations.chair_id = chair_table.id order by chair_table.id ASC, chair_locations.created_at DESC) as updated_chair_locations group by updated_chair_locations.id;`,
+		`select * from (
+			select chair_table.id, chair_locations.id as iid, chair_locations.created_at, chair_locations.latitude, chair_locations.longitude, chair_table.name, chair_table.model
+			from chair_locations
+			  inner join (
+				  select dup_table.id, dup_table.created_at, ifnull(dup_table.status, "COMPLETED"), dup_table.name, dup_table.model
+				  from (
+				    select chairs.id, update_table.status, update_table.created_at, chairs.name, chairs.model from chairs
+				      left join (
+				   		 select ride_statuses.status, rides.chair_id, ride_statuses.created_at from rides inner join ride_statuses on rides.id = ride_statuses.ride_id) as update_table
+			        on chairs.id = update_table.chair_id where chairs.is_active is true ORDER BY chairs.id ASC, update_table.created_at ASC) as dup_table
+				  where dup_table.status = "COMPLETED" || dup_table.status is NULL group by dup_table.id) as chair_table
+			  on chair_locations.chair_id = chair_table.id
+				order by chair_table.id ASC, chair_locations.created_at ASC) as updated_chair_locations
+			group by updated_chair_locations.id;`,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
