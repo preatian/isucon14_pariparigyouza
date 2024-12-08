@@ -144,7 +144,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	go func() {
-		if _, err := http.Get("http://127.0.0.1:19000/api/group/collect"); err != nil {
+		if _, err := http.Get("http://127.0.0.1:9000/api/group/collect"); err != nil {
 			slog.Error("failed to communicate with pprotein:", "err", err)
 		}
 	}()
