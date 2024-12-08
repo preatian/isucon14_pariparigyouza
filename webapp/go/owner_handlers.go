@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"log/slog"
+	//	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -194,7 +194,6 @@ type ownerGetChairResponseChair struct {
 func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	owner := ctx.Value("owner").(*Owner)
-	slog.Info("owner Get Chair", "owner", owner)
 
 	//chairs := []chairWithDetail{}
 	//if err := db.SelectContext(ctx, &chairs, `SELECT id,

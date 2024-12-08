@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 )
 
@@ -47,6 +48,10 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", matched.ID, ride.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	if v, ok := appNotificationChannelMap[ride.ID]; ok {
+		slog.Info("notification channel")
+		v <- true
 	}
 
 	w.WriteHeader(http.StatusNoContent)

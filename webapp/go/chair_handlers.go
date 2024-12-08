@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/oklog/ulid/v2"
@@ -92,6 +93,25 @@ func chairPostActivity(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+
+	rides := []Ride{}
+	err = db.SelectContext(
+		ctx,
+		&rides,
+		`SELECT * FROM rides WHERE chair_id = ?`,
+		chair.ID,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	for _, ride := range rides {
+		if v, ok := appNotificationChannelMap[ride.ID]; ok {
+			slog.Info("notification channel")
+			v <- true
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

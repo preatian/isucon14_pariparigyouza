@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -432,6 +434,11 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if v, ok := appNotificationChannelMap[rideID]; ok {
+		slog.Info("notification channel")
+		v <- true
+	}
+
 	writeJSON(w, http.StatusAccepted, &appPostRidesResponse{
 		RideID: rideID,
 		Fare:   fare,
@@ -658,6 +665,140 @@ type appGetNotificationResponseChairStats struct {
 	TotalEvaluationAvg float64 `json:"total_evaluation_avg"`
 }
 
+var appNotificationChannelMap = make(map[string]chan bool)
+
+func appGetNotificationSSE(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user := ctx.Value("user").(*User)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	tx, err := db.Beginx()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+
+	ride := &Ride{}
+	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, user.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			//writeJSON(w, http.StatusOK, &appGetNotificationResponse{
+			//	RetryAfterMs: 30,
+			//})
+			//return
+			slog.Info("datanull")
+			s := fmt.Sprintf("data: null\n\n")
+			fmt.Fprintf(w, s)
+			w.(http.Flusher).Flush()
+			//continue
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if _, ok := appNotificationChannelMap[ride.ID]; !ok {
+		appNotificationChannelMap[ride.ID] = make(chan bool, 10)
+	}
+	for range appNotificationChannelMap[ride.ID] {
+		slog.Info("chanel recieve")
+
+		yetSentRideStatus := RideStatus{}
+		status := ""
+		if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				status, err = getLatestRideStatus(ctx, tx, ride.ID)
+				if err != nil {
+					writeError(w, http.StatusInternalServerError, err)
+					return
+				}
+			} else {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+		} else {
+			status = yetSentRideStatus.Status
+		}
+
+		fare, err := calculateDiscountedFare(ctx, tx, user.ID, ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		response := &appGetNotificationResponse{
+			Data: &appGetNotificationResponseData{
+				RideID: ride.ID,
+				PickupCoordinate: Coordinate{
+					Latitude:  ride.PickupLatitude,
+					Longitude: ride.PickupLongitude,
+				},
+				DestinationCoordinate: Coordinate{
+					Latitude:  ride.DestinationLatitude,
+					Longitude: ride.DestinationLongitude,
+				},
+				Fare:      fare,
+				Status:    status,
+				CreatedAt: ride.CreatedAt.UnixMilli(),
+				UpdateAt:  ride.UpdatedAt.UnixMilli(),
+			},
+			//RetryAfterMs: 30,
+		}
+
+		slog.Info("data", "chairid", ride.ChairID)
+		if ride.ChairID.Valid {
+			chair := &Chair{}
+			if err := tx.GetContext(ctx, chair, `SELECT * FROM chairs WHERE id = ?`, ride.ChairID); err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+
+			stats, err := getChairStats(ctx, tx, chair.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+
+			response.Data.Chair = &appGetNotificationResponseChair{
+				ID:    chair.ID,
+				Name:  chair.Name,
+				Model: chair.Model,
+				Stats: stats,
+			}
+		}
+
+		if yetSentRideStatus.ID != "" {
+			_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if response.Data.Chair == nil {
+			slog.Info("data", "response", response.Data)
+			s := fmt.Sprintf("data: {\"ride_id\":\"%s\",\"pickup_coordinate\":{\"latitude\":%d,\"longitude\":%d},\"destination_coordinate\":{\"latitude\":%d,\"longitude\":%d},\"fare\":%d,\"status\":\"%s\",\"chair\":null,\"created_at\":%d,\"updated_at\":%d}\"\n\n", response.Data.RideID, response.Data.PickupCoordinate.Latitude, response.Data.PickupCoordinate.Longitude, response.Data.DestinationCoordinate.Latitude, response.Data.DestinationCoordinate.Longitude, response.Data.Fare, response.Data.Status, response.Data.CreatedAt, response.Data.UpdateAt)
+			slog.Info(s)
+			slog.Info("data send", "data", s)
+			fmt.Fprintf(w, s)
+			w.(http.Flusher).Flush()
+		} else {
+			slog.Info("data", "response", response.Data)
+			s := fmt.Sprintf("data: {\"ride_id\":\"%s\",\"pickup_coordinate\":{\"latitude\":%d,\"longitude\":%d},\"destination_coordinate\":{\"latitude\":%d,\"longitude\":%d},\"fare\":%d,\"status\":\"%s\",\"chair\":{\"id\":\"%s\",\"name\":\"%s\",\"model\":\"%s\",\"stats\":{\"total_rides_count\":%d,\"total_evaluation_avg\":%f}},\"created_at\":%d,\"updated_at\":%d}\"\n\n", response.Data.RideID, response.Data.PickupCoordinate.Latitude, response.Data.PickupCoordinate.Longitude, response.Data.DestinationCoordinate.Latitude, response.Data.DestinationCoordinate.Longitude, response.Data.Fare, response.Data.Status, response.Data.Chair.ID, response.Data.Chair.Name, response.Data.Chair.Model, response.Data.Chair.Stats.TotalRidesCount, response.Data.Chair.Stats.TotalEvaluationAvg, response.Data.CreatedAt, response.Data.UpdateAt)
+			slog.Info(s)
+			slog.Info("data send", "data", s)
+			fmt.Fprintf(w, s)
+			w.(http.Flusher).Flush()
+		}
+
+		//writeJSON(w, http.StatusOK, response)
+	}
+}
+
 func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := ctx.Value("user").(*User)
@@ -757,6 +898,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Info("response", "response.data", response.Data)
 	writeJSON(w, http.StatusOK, response)
 }
 
