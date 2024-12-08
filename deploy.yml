@@ -14,10 +14,13 @@
       synchronize:
         src: ./env.sh
         dest: /home/isucon/env.sh
-    - name: build and restart webapp
+    - name: build
       shell: |
         cd /home/isucon/webapp/go
-        go build
-        mv go {{ binary_name }}
+        /home/isucon/local/golang/bin/go build -o {{ binary_name }}
+      become_user: isucon
+
+    - name: restart webapp
+      shell: |
         systemctl restart {{ unit_name }}
       become: True
