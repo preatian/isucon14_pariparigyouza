@@ -20,6 +20,13 @@ type chairPostChairsResponse struct {
 	OwnerID string `json:"owner_id"`
 }
 
+type chairDistanceCache struct {
+	LastLocation  *ChairLocation
+	TotalDistance int
+}
+
+var chairDistanceCacheMap = make(map[string]*chairDistanceCache, 0)
+
 func chairPostChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &chairPostChairsRequest{}
@@ -125,6 +132,18 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	if err := tx.GetContext(ctx, location, `SELECT * FROM chair_locations WHERE id = ?`, chairLocationID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+
+	if val, ok := chairDistanceCacheMap[chair.ID]; ok {
+		distance := abs(val.LastLocation.Latitude-location.Latitude) + abs(val.LastLocation.Longitude-location.Longitude)
+		newTotalDistance := chairDistanceCacheMap[chair.ID].TotalDistance + distance
+		chairDistanceCacheMap[chair.ID].TotalDistance = newTotalDistance
+		chairDistanceCacheMap[chair.ID].LastLocation = location
+	} else {
+		chairDistanceCacheMap[chair.ID] = &chairDistanceCache{
+			LastLocation:  location,
+			TotalDistance: 0,
+		}
 	}
 
 	ride := &Ride{}

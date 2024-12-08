@@ -143,6 +143,28 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	clear(chairDistanceCacheMap)
+	chair_locations := []ChairLocation{}
+	if err := db.SelectContext(ctx, &chair_locations, "SELECT * FROM chair_locations ORDER BY created_at"); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	for _, location := range chair_locations {
+
+		if val, ok := chairDistanceCacheMap[location.ChairID]; ok {
+			distance := abs(val.LastLocation.Latitude-location.Latitude) + abs(val.LastLocation.Longitude-location.Longitude)
+			newTotalDistance := chairDistanceCacheMap[location.ChairID].TotalDistance + distance
+			chairDistanceCacheMap[location.ChairID].TotalDistance = newTotalDistance
+			chairDistanceCacheMap[location.ChairID].LastLocation = &location
+		} else {
+			chairDistanceCacheMap[location.ChairID] = &chairDistanceCache{
+				LastLocation:  &location,
+				TotalDistance: 0,
+			}
+		}
+	}
+
 	go func() {
 		if _, err := http.Get("http://127.0.0.1:9000/api/group/collect"); err != nil {
 			slog.Error("failed to communicate with pprotein:", "err", err)

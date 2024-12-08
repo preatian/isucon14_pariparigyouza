@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -193,49 +194,67 @@ type ownerGetChairResponseChair struct {
 func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	owner := ctx.Value("owner").(*Owner)
+	slog.Info("owner Get Chair", "owner", owner)
 
-	chairs := []chairWithDetail{}
-	if err := db.SelectContext(ctx, &chairs, `SELECT id,
-       owner_id,
-       name,
-       access_token,
-       model,
-       is_active,
-       created_at,
-       updated_at,
-       IFNULL(total_distance, 0) AS total_distance,
-       total_distance_updated_at
-FROM chairs
-       LEFT JOIN (SELECT chair_id,
-                          SUM(IFNULL(distance, 0)) AS total_distance,
-                          MAX(created_at)          AS total_distance_updated_at
-                   FROM (SELECT chair_id,
-                                created_at,
-                                ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
-                                ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
-                         FROM chair_locations) tmp
-                   GROUP BY chair_id) distance_table ON distance_table.chair_id = chairs.id
-WHERE owner_id = ?
-`, owner.ID); err != nil {
+	//chairs := []chairWithDetail{}
+	//if err := db.SelectContext(ctx, &chairs, `SELECT id,
+	//     owner_id,
+	//     name,
+	//     access_token,
+	//     model,
+	//     is_active,
+	//     created_at,
+	//     updated_at,
+	//     IFNULL(total_distance, 0) AS total_distance,
+	//     total_distance_updated_at
+	//  FROM chairs
+	//     LEFT JOIN (SELECT chair_id,
+	//                        SUM(IFNULL(distance, 0)) AS total_distance,
+	//                        MAX(created_at)          AS total_distance_updated_at
+	//                 FROM (SELECT chair_id,
+	//                              created_at,
+	//                              ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
+	//                              ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
+	//                       FROM chair_locations) tmp
+	//                 GROUP BY chair_id) distance_table ON distance_table.chair_id = chairs.id
+	//  WHERE owner_id = ?
+	//  `, owner.ID); err != nil {
+	//	writeError(w, http.StatusInternalServerError, err)
+	//	return
+	//}
+
+	chairs := []Chair{}
+	if err := db.SelectContext(ctx, &chairs, "SELECT * FROM chairs WHERE owner_id = ?", owner.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	res := ownerGetChairResponse{}
 	for _, chair := range chairs {
-		c := ownerGetChairResponseChair{
-			ID:            chair.ID,
-			Name:          chair.Name,
-			Model:         chair.Model,
-			Active:        chair.IsActive,
-			RegisteredAt:  chair.CreatedAt.UnixMilli(),
-			TotalDistance: chair.TotalDistance,
+		if _, ok := chairDistanceCacheMap[chair.ID]; !ok {
+			c := ownerGetChairResponseChair{
+				ID:                     chair.ID,
+				Name:                   chair.Name,
+				Model:                  chair.Model,
+				Active:                 chair.IsActive,
+				RegisteredAt:           chair.CreatedAt.UnixMilli(),
+				TotalDistance:          0,
+				TotalDistanceUpdatedAt: nil,
+			}
+			res.Chairs = append(res.Chairs, c)
+		} else {
+			update_at := chairDistanceCacheMap[chair.ID].LastLocation.CreatedAt.UnixMilli()
+			c := ownerGetChairResponseChair{
+				ID:                     chair.ID,
+				Name:                   chair.Name,
+				Model:                  chair.Model,
+				Active:                 chair.IsActive,
+				RegisteredAt:           chair.CreatedAt.UnixMilli(),
+				TotalDistance:          chairDistanceCacheMap[chair.ID].TotalDistance,
+				TotalDistanceUpdatedAt: &update_at,
+			}
+			res.Chairs = append(res.Chairs, c)
 		}
-		if chair.TotalDistanceUpdatedAt.Valid {
-			t := chair.TotalDistanceUpdatedAt.Time.UnixMilli()
-			c.TotalDistanceUpdatedAt = &t
-		}
-		res.Chairs = append(res.Chairs, c)
 	}
 	writeJSON(w, http.StatusOK, res)
 }
